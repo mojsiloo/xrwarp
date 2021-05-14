@@ -14,7 +14,7 @@ def get_transform(ds, x_coords, y_coords):
     cell_size_y = round(np.mean(abs(ds.indexes[y_coords][:-1] - ds.indexes[y_coords][1:])), 6)
     cell_size_x = round(np.mean(abs(ds.indexes[x_coords][:-1] - ds.indexes[x_coords][1:])), 6)
     west = round(float(ds[x_coords].min()) - abs(cell_size_x / 2.0), 6)
-    north = round(float(ds[y_coords].max()) - abs(cell_size_y / 2.0), 6)
+    north = round(float(ds[y_coords].max()) + abs(cell_size_y / 2.0), 6) # isnt this a plus
     transform = rasterio.transform.from_origin(west, north, cell_size_x, cell_size_y)
     return transform
 
@@ -100,13 +100,14 @@ def warp_ds(ds,
     west, south, east, north = array_bounds(height=y_size, 
                                             width=x_size, 
                                             transform=ds_src_transform)
+    src_ds = create_mem_src(x_size, y_size, ds_src_transform, src_crs)
     dst_transform, dst_width, dst_height = calculate_default_transform(src_crs=src_crs, 
                                                                        dst_crs=dst_crs, 
                                                                        width=x_size, height=y_size,
                                                                        left=west, bottom=south, right=east, top=north,
                                                                        resolution=(new_cell_size, new_cell_size))
     out_bounds = array_bounds(height=dst_height, width=dst_width, transform=dst_transform)
-    src_ds = create_mem_src(x_size, y_size, ds_src_transform, src_crs)
+    
     wrapopts = gdal.WarpOptions(xRes=new_cell_size, 
                             yRes=new_cell_size, 
                             srcSRS=src_crs.to_wkt(),
