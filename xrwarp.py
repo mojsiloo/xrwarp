@@ -10,12 +10,14 @@ from operator import itemgetter
 
 
 def get_transform(ds, x_coords, y_coords):
-    import numpy as np
-    cell_size_y = round(np.mean(abs(ds.indexes[y_coords][:-1] - ds.indexes[y_coords][1:])), 6)
-    cell_size_x = round(np.mean(abs(ds.indexes[x_coords][:-1] - ds.indexes[x_coords][1:])), 6)
-    west = round(float(ds[x_coords].min()) - abs(cell_size_x / 2.0), 6)
-    north = round(float(ds[y_coords].max()) + abs(cell_size_y / 2.0), 6) # isnt this a plus
-    transform = rasterio.transform.from_origin(west, north, cell_size_x, cell_size_y)
+    x_size, y_size = ds.dims[x_coords], ds.dims[y_coords]
+    i_top, i_bottom = [ds[y_coords].values[y] for y in [0, -1]]
+    i_left, i_right = [ds[x_coords].values[x] for x in [0, -1]] 
+    res_x = (i_right - i_left) / (x_size - 1)
+    res_y = (i_bottom - i_top) / (y_size - 1)
+    north = i_top - (res_y/2.0)
+    west = i_left - (res_x/2.0)
+    transform = rasterio.transform.from_origin(west, north, res_x, res_y)
     return transform
 
 
@@ -36,12 +38,12 @@ def create_mem_src(x_size, y_size, transform, crs):
     return src_ds
 
 
-def gen_get_coords(affine, cell_size):
+def gen_get_coords(affine):
     # generate convenience function to co-ordinates using affine and cell_size
     # move the cell_size by 1/2 to represent the center
     # can be done more elegantly?
     def _f(x): 
-        return x * affine * affine.translation(0.5*cell_size, 0.5*cell_size)
+        return (x + 0.5) * affine
     return _f
 
 def fill_nans_with_gdal(data, transform, crs):
