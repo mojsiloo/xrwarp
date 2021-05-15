@@ -17,7 +17,9 @@ def get_transform(ds, x_coords, y_coords):
     res_y = (i_bottom - i_top) / (y_size - 1)
     north = i_top - (res_y/2.0)
     west = i_left - (res_x/2.0)
-    transform = rasterio.transform.from_origin(west, north, res_x, res_y)
+    east = i_right + (res_x/2.0)
+    south = i_bottom + (res_y/2.0)
+    transform = rasterio.transform.from_bounds(west, south, east, north, x_size, y_size)
     return transform
 
 
@@ -43,7 +45,7 @@ def gen_get_coords(affine):
     # move the cell_size by 1/2 to represent the center
     # can be done more elegantly?
     def _f(x): 
-        return (x + 0.5) * affine
+        return list(x + 0.5) * affine
     return _f
 
 def fill_nans_with_gdal(data, transform, crs):
@@ -61,21 +63,18 @@ def fill_nans_with_gdal(data, transform, crs):
     return res
 
 
-def return_coords(affine, cell_size, width, height):
+def return_coords(affine, width, height):
     # get new long and lat co-ords
     import itertools
     from operator import itemgetter
-    get_coord = gen_get_coords(affine, cell_size)
+    get_coord = gen_get_coords(affine)
 
-    new_xs = list(map(itemgetter(0), 
-                  map(get_coord, 
-                      zip(np.arange(width, dtype="int"), 
-                          itertools.repeat(0)))))
-
-    new_ys = list(map(itemgetter(1),
-                  map(get_coord, 
-                      zip(itertools.repeat(0), 
-                          np.arange(height, dtype="int")))))
+    new_xs = np.stack((np.arange(width), np.repeat(0,width)), 1)
+    new_xs = np.apply_along_axis(get_coord, 1, new_xs)[...,0]
+    
+    new_ys = np.stack((np.repeat(0, height), np.arange(height)), 1)
+    new_ys = np.apply_along_axis(get_coord, 1, new_ys)[...,1]
+    
     return new_xs, new_ys
 
 
@@ -117,7 +116,7 @@ def warp_ds(ds,
                             outputBounds=out_bounds,
                             resampleAlg=resampling_alg,
                             dstNodata=np.nan)
-    new_xs, new_ys = return_coords(dst_transform, new_cell_size, dst_width, dst_height)
+    new_xs, new_ys = return_coords(dst_transform, dst_width, dst_height)
     time_values = times = ds.indexes[tname]
     warped_data = np.zeros((time_size, dst_height, dst_width))
     for ti, tvalue in tqdm(list(enumerate(ds.indexes[tname]))):
